@@ -1,0 +1,247 @@
+---
+title: "Manual Filter"
+output: html_document
+---
+
+#Collecting all the Data
+
+Effectively running JSONParseR.R
+
+```{r, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(mosaic)
+library(tidyjson)
+library(readr)
+library(lubridate)
+```
+
+```{r, include=FALSE}
+text <- read_file("Data/data1.txt")
+list <- unlist(strsplit(text, "\n"))   #One auction per row
+small <- sample(list, size=10000, replace=FALSE)
+```
+
+```{r, include=FALSE}
+event <- small %>% as.tbl_json %>%
+  enter_object("em") %>%
+  spread_values(timestamp = jnumber("t"),
+                country = jstring("cc"),
+                region = jstring("rg"))
+event <- event %>%
+  mutate(timestamp = round(timestamp, 10)/1000) %>%
+  mutate(timestamp = as.POSIXct(timestamp, origin = "1970-01-01",tz = "GMT")) %>%
+  mutate(dayofweek = wday(timestamp)) %>%
+  mutate(hour = hour(timestamp)) %>%
+  mutate(month = month(timestamp)) %>%
+  select(-timestamp)
+
+auction <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  spread_values(margin = jnumber("margin"),
+                tmax = jnumber("tmax")) %>%
+  enter_object("user") %>%
+  spread_values(bluekai = jstring("bkc"))
+auction <- auction %>%
+  mutate(bluekai = !is.na(bluekai))
+
+site <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("site") %>%
+  spread_values(sitetype = jstring("typeid"),
+                sitecat = jstring("cat")) %>%
+  enter_object("publisher") %>%
+  spread_values(pubID = jstring("id"))
+
+bidreq <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array() %>%
+  spread_values(reqID1 = jstring("id"),
+                vertical = jstring("verticalid"),
+                dsp = jstring("bidderid")) %>%   #Don't use if we're making 35 algorithms
+  enter_object("impressions") %>%
+  gather_array() %>%
+  spread_values(bidfloor = jnumber("bidfloor"),
+                adformat = jstring("format"),
+                adproduct = jstring("product")) %>%
+  enter_object("banner") %>%
+  spread_values(width = jnumber("w"),
+                height = jnumber("h"))
+bidreq <- bidreq %>%
+  filter(dsp != "35" & dsp != "37") %>% 
+  filter(adformat != "1" &
+           adformat != "2" &
+           adformat != "3" &
+           adformat != "4" &
+           adformat != "6" &
+           adformat != "7" &
+           adformat != "20" &
+           adformat != "21" &
+           adformat != "22" & 
+           adformat != "25" & 
+           adformat != "26")
+
+bid <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bids") %>%
+  gather_array %>%
+  spread_values(reqID2 = jstring("requestid"),
+                winner = jstring("winner"))
+```
+
+```{r, include=FALSE}
+full <- bidreq %>%
+  left_join(auction, by="document.id") %>%
+  left_join(event, by="document.id") %>%
+  left_join(site, by="document.id") %>%
+  left_join(bid, by="document.id")
+full <- as.data.frame(full)
+full <- full %>%
+  mutate(responded = reqID1==reqID2) %>%
+  mutate(realwinner = responded & winner == "TRUE") %>%
+  select(-winner)
+full[["realwinner"]][is.na(full[["realwinner"]])] <- 0
+full[["responded"]][is.na(full[["responded"]])] <- 0
+full <- full %>%
+  select(-reqID1) %>%
+  select(-reqID2)
+full <- full %>%
+  mutate(responded = responded == 1) %>%
+  mutate(realwinner = realwinner == 1)
+```
+
+#Filtering
+
+Here we construct filters based solely on interesting variables found in the data. The baseline proportions of impression success for the data are:
+
+```{r}
+round(tally(full$realwinner, format="proportion"),3)
+```
+
+##Filter 1
+
+Now we apply a filter:
+- Randomly filter 20% from 10-4
+- Cut out DSPs 19, 10, 28, 25, 34, 36
+
+```{r}
+clean <- full %>%
+  filter(dsp != "19" &
+           dsp != "10" &
+           dsp != "28" &
+           dsp != "25" &
+           dsp != "34" &
+           dsp != "36")
+clean1 <- clean %>%
+  filter(hour >= 10 &
+           hour <= 16) %>%
+  sample_frac(0.8, replace=FALSE)
+clean2 <- clean %>%
+  filter(hour <10 |
+           hour > 16)
+clean <- bind_rows(clean1, clean2)
+```
+
+```{r}
+round(tally(clean$realwinner, format="proportion"),3)
+```
+
+Now we construct a confusion matrix
+
+```{r}
+confmat <- matrix(c(0,0,0,0), nrow=2, ncol=2)
+confmat[1,1] <- sum(!full$realwinner) - sum(!clean$realwinner)
+confmat[1,2] <- sum(full$realwinner) - sum(clean$realwinner)
+confmat[2,1] <- sum(!clean$realwinner)
+confmat[2,2] <- sum(clean$realwinner)
+confmat
+```
+
+```{r}
+#|TN|FN|
+#|--|--|
+#|FP|TP|
+```
+
+```{r}
+recall <- confmat[2,2]/(confmat[2,2]+confmat[1,2]); recall
+filtered <- sum(confmat[1,])/sum(confmat); filtered
+```
+
+##Filter 2
+
+What happens if we don't randomly filter during peak hours?
+We apply a filter:
+- Cut out DSPs 19, 10, 28, 25, 34, 36
+
+```{r}
+clean <- full %>%
+  filter(dsp != "19" &
+           dsp != "10" &   # Without this it's 20% filtering, 100% recall
+           dsp != "28" &
+           dsp != "25" &
+           dsp != "34" &
+           dsp != "36")
+round(tally(clean$realwinner, format="proportion"),3)
+```
+
+Now we construct another confusion matrix
+
+```{r}
+confmat <- matrix(c(0,0,0,0), nrow=2, ncol=2)
+confmat[1,1] <- sum(!full$realwinner) - sum(!clean$realwinner)
+confmat[1,2] <- sum(full$realwinner) - sum(clean$realwinner)
+confmat[2,1] <- sum(!clean$realwinner)
+confmat[2,2] <- sum(clean$realwinner)
+confmat
+```
+
+```{r}
+#|TN|FN|
+#|--|--|
+#|FP|TP|
+```
+
+```{r}
+recall <- confmat[2,2]/(confmat[2,2]+confmat[1,2]); recall
+filtered <- sum(confmat[1,])/sum(confmat); filtered
+```
+
+##Filter 3
+
+What happens if we only keep 6 DSPs?
+We apply a filter:
+- Keep only DSPs 1, 2, 5, 14, 27, 29
+
+```{r}
+cleaner <- full %>%
+  filter(dsp == "1" |
+           dsp == "4" |
+           dsp == "5" |
+           dsp == "14" |
+           dsp == "27" |
+           dsp == "29")
+round(tally(cleaner$realwinner, format="proportion"),3)
+```
+
+```{r}
+confmat <- matrix(c(0,0,0,0), nrow=2, ncol=2)
+confmat[1,1] <- sum(!full$realwinner) - sum(!cleaner$realwinner)
+confmat[1,2] <- sum(full$realwinner) - sum(cleaner$realwinner)
+confmat[2,1] <- sum(!cleaner$realwinner)
+confmat[2,2] <- sum(cleaner$realwinner)
+confmat
+```
+
+```{r}
+#|TN|FN|
+#|--|--|
+#|FP|TP|
+```
+
+```{r}
+recall <- confmat[2,2]/(confmat[2,2]+confmat[1,2]); recall
+filtered <- sum(confmat[1,])/sum(confmat); filtered
+```
+

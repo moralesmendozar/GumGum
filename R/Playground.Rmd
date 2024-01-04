@@ -1,0 +1,153 @@
+---
+title: "Playground"
+output: pdf_document
+---
+
+```{r}
+# Need to install all of these packages first...
+# Use function install.packages("package_name")
+library(jsonlite)
+library(dplyr)
+library(ggplot2)
+library(mosaic)
+```
+
+```{r}
+#Don't use
+foo <- stream_in(file("samp.json"))   # streams in whole json file
+small <- sample_n(foo, 100, replace=TRUE)   # smaller sample
+small <- small %>%
+  filter(small$auction$bids == "list()")
+```
+
+```{r}
+library(tidyjson)
+library(readr)
+library(mosaic)
+
+chars <- read_file("samp.json")   #Read in file
+list <- unlist(strsplit(chars, "\n"))   #One auction per row
+list[1] %>% prettify #One example of a JSON entry
+
+bid_vs_vert <- list %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array %>%
+  spread_values(BidderID = jnumber("bidderid"),
+                VerticalID = jnumber("verticalid"))
+
+pub <- list %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("site") %>%
+  enter_object("publisher") %>%
+  spread_values(PubID = jnumber("id"))
+```
+
+```{r}
+big <- read_file("data.json")   #Read in file
+biglist <- unlist(strsplit(big, "\n"))   #One auction per row
+smallbiglist <- sample(biglist, size=1000, replace=FALSE)
+
+pub <- biglist %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("site") %>%
+  enter_object("publisher") %>%
+  spread_values(PubID = jnumber("id"))
+
+bid_vs_vert <- biglist %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array %>%
+  spread_values(BidderID = jnumber("bidderid"),
+                VerticalID = jnumber("verticalid"))
+```
+
+```{r}
+test <- read_file("/home/jche/R/Data/3_15")
+test <- unlist(strsplit(test, "\n"))   #One auction per row
+small[1] %>% prettify #One example of a JSON entry
+
+res <- test %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bids") %>%
+  gather_array %>%
+  spread_values(Bids = jnumber("price"),
+                BidderID2 = jstring("bidderid"))
+
+info <- test %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array %>%
+  spread_values(BidderID = jnumber("bidderid"),
+                VerticalID = jnumber("verticalid"))
+
+all <- left_join(info, res, by="document.id")
+
+winners <- all %>% 
+  mutate(win = BidderID == BidderID2)
+```
+
+```{r}
+onlywinners <- winners %>% 
+  filter(win==TRUE) %>%
+  filter(BidderID!=37)
+
+info <- info %>%
+  filter(BidderID!=37)
+
+a <- as.data.frame(tally(~onlywinners$BidderID, format="proportion"))
+b <- as.data.frame(tally(~info$BidderID, format="proportion"))
+c <- left_join(b, a, by="Var1")
+c[is.na(c)] <- 0
+c <- c %>%
+  mutate(OddsSuccess=round(Freq.y/Freq.x,3))
+```
+
+```{r}
+res <- test %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bids") %>%
+  gather_array %>%
+  spread_values(Price = jnumber("price"),
+                BidderID2 = jstring("bidderid"))
+
+info <- test %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array %>%
+  spread_values(BidderID = jnumber("bidderid"),
+                VerticalID = jnumber("verticalid"))
+
+all <- left_join(info, res, by="document.id")
+
+winners <- all %>% 
+  mutate(makebid = BidderID == BidderID2)
+winners[is.na(winners)] <- FALSE
+ggplot(winners, aes(x=BidderID, y=VerticalID, colour=makebid)) + 
+  geom_jitter()
+
+pretty <- winners %>%
+  select(Price, makebid)
+```
+
+```{r}
+bids <- test %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bids") %>%
+  gather_array %>%
+  spread_values(Win = jstring("winner"))
+
+filter(bids, Win==TRUE)
+```
+
+```{r}
+siteid <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("site") %>%
+  spread_values(ID = jstring("id"),
+                Domain = jstring("domain"),
+                Zone = jstring("zoneDomain"))
+siteid <- siteid %>%
+  filter(Zone != "*")
+```
+

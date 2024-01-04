@@ -1,0 +1,68 @@
+---
+title: "Number of Bids Data"
+output: html_document
+---
+
+# Preparing the data frame
+
+```{r}
+library(readr)
+library(tidyr)
+library(dplyr)
+data <- read_csv("Data/mycsv.ods", col_names = FALSE)
+hours <- data.frame(rep(0:23, 7))
+days <- data.frame(c(rep(1,24), rep(2,24), rep(3,24), rep(4,24), rep(5,24), rep(6,24), rep(7,24)))
+
+data <- data %>%
+  bind_cols(days) %>%
+  bind_cols(hours)
+
+names(data) = c("No_bids", "One_bid", "Multi_bids", "day", "hour")
+```
+
+#Visualizations
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+hourly <- data %>%
+  group_by(hour) %>%
+  summarise(None = sum(No_bids), One = sum(One_bid), Multiple = sum(Multi_bids))
+
+hourly <- hourly %>%
+  mutate(Total = None + One + Multiple) %>%
+  mutate(None_Prop = None / Total) %>%
+  mutate(One_Prop = One / Total) %>%
+  mutate(Multi_Prop = Multiple / Total) %>%
+  mutate(OneOrMore = (One + Multiple) / Total)
+hourly <- round(hourly, 2)
+
+ggplot(hourly, aes(x=hour, y=Total, fill = OneOrMore, label = OneOrMore)) +
+  geom_bar(stat="identity") + 
+  geom_text(vjust = -1) +
+  ggtitle("Auction Success over Hour of Day") +
+  xlab("Hour of day") +
+  ylab("Total Number of Auctions") + 
+  guides(fill=guide_legend(title="Proportion of Auctions \n with 1+ Bid Requests", reverse=TRUE))
+```
+
+```{r}
+daily <- data %>%
+  group_by(day) %>%
+  summarise(None = sum(No_bids), One = sum(One_bid), Multiple = sum(Multi_bids))
+
+daily <- daily %>%
+  mutate(Total = None + One + Multiple) %>%
+  mutate(None_Prop = None / Total) %>%
+  mutate(One_Prop = One / Total) %>%
+  mutate(Multi_Prop = Multiple / Total) %>%
+  mutate(OneOrMore = (One + Multiple) / Total)
+daily <- round(daily, 3)
+
+ggplot(daily, aes(x=day, y=Total, fill = OneOrMore, label = OneOrMore)) +
+  geom_bar(stat="identity") + 
+  geom_text(vjust = -1)
+```
+

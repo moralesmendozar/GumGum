@@ -1,0 +1,83 @@
+---
+title: "F1 Score"
+output: html_document
+---
+
+#Background
+
+When dealing with imbalanced classes in machine learning classification, we often do not want to use accuracy as a test metric. For example, if only 3% of impressions receive positive responses, an algorithm that always predicts negative responses would have 97% accuracy, and yet be completely useless for our purposes of detecting positive responses.
+
+Instead, we care about false positive and false negative rates. The confusion matrix below illustrates what these are:
+
+Confusion Matrix| Actual -       | Actual +
+----------- | -------------- | -------------
+Predicted - | True Negative  | False Negative
+Predicted + | False Positive | True Positive
+
+Precision and recall are two metrics that account for false positive and false negative rates. In the context of our problem, precision is the proportion of the bid requests we send out that are successful, while recall is the proportion of the successful bid requests that wwe send out (i.e. do not filter). In terms of the confusion matrix, $precision = \frac{TP}{TP+FP}$ and $recall = \frac{TP}{TP+FN}$. 
+
+The F-score is another metric that considers both the precision and the recall. The $F_\beta$-score is: $2*\frac{precision*recall}{(\beta^{2}*precision)+recall}$, where $\beta$ is a parameter that we set when we attach $\beta$ times as much importance to recall as to precision.
+
+In the context of our problem, we care a lot more about recall than we do precision. One rule-of-thumb metric we have is that an increase of 1% in recall is worth more than an increase of 5% in filter percentage. That is, we would rather have a 91% recall, 20% filtering algorithm than a 90% recall, 25% filtering algorithm. We want to conduct some tests to determine what parameters of $\beta$ in the F-score will provide us with a useful metric to evaluate out algorithms.
+
+#Testing
+
+We first define some functions.
+
+```{r}
+library(dplyr)
+# All coded inefficiently for ease of understanding
+makematrix <- function(rec, red, N, actual){
+  matrix <- matrix(data=c(0,0,0,0), nrow=2, ncol=2)
+  matrix[1,1] <- rec*actual*N
+  matrix[2,1] <- (1-rec)*actual*N
+  matrix[1,2] <- (1-red)*N - matrix[1,1]
+  matrix[2,2] <- red*N - matrix[2,1]
+  return(matrix)
+}
+precision <- function(x){
+  return(x[1,1]/(x[1,1]+x[1,2]))
+}
+recall <- function(x){
+  return(x[1,1]/(x[1,1]+x[2,1]))
+}
+f1 <- function(x, beta){
+  r = recall(x)
+  p = precision(x)
+  return((1+beta^2)*(p*r)/(beta^2*p+r))
+}
+compare <- function(rec, red, N, actual){
+  vec <- c(1:30)
+  df <- data.frame(f1(makematrix(rec, red, N, actual), vec),
+                   f1(makematrix(rec+.01, red, N, actual), vec),
+                   f1(makematrix(rec, red+.05, N, actual), vec))
+  names(df) <- c("Original", "IncRecall1", "IncFiltering5")
+  df <- df %>%
+    # "good" if a 1% increase in recall is worth more than a 5% increase in filtering
+    mutate(Good = IncRecall1 > IncFiltering5)   
+  print(makematrix(rec,red,N,actual))
+  print(precision(makematrix(rec, red, N, actual)))
+  return(df)
+}
+```
+
+Some preliminary tests show that changing the precision, filter percentage, or the sample size N does not actually change the $\beta$ value at which the F-score increases more for a 1% increase in recall than for a 5% increase in filtering. The value of $\beta$, then, depends on the proportion of actual positives in the data.
+
+##Changing Number of Actual Positives
+
+For recall of .9, reduction of 20%, 10,000 obervations, and 400 actual positive observations:
+```{r}
+compare(.9, .2, 10000, .04)
+```
+
+For recall of .9, reduction of 20%, 10,000 obervations, and 300 actual positive observations:
+```{r}
+compare(.9, .2, 10000, .03)
+```
+
+For recall of .9, reduction of 20%, 10,000 obervations, and 200 actual positive observations:
+```{r}
+compare(.9, .2, 10000, .02)
+```
+
+Empirically, it seems that our impression data are about 3% successful. Thus, we will use a $\beta$ of 12 for our F-score metric.

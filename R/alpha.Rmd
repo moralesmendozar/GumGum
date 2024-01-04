@@ -1,0 +1,46 @@
+---
+title: "Determining alpha-cutoff"
+author: "Jonathan Che"
+date: "August 5, 2016"
+output: html_document
+---
+
+
+```{r}
+library(readr)
+library(ggplot2)
+
+raw1 <- read.csv("Data/weekly_alpha_trends1.csv", header=TRUE)
+raw1$Day <- factor(raw1$Day)
+ggplot(raw1, aes(x=Hour, y=Alpha, colour=Day)) +
+  scale_color_discrete(h = c(150,300), c = 50, l = 60, h.start = 0) +
+  geom_point() +
+  geom_smooth(se=FALSE,method="lm")
+
+ggplot(raw1, aes(x=Hour, y=Alpha)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  ylab("Optimal Cutoff") +
+  ggtitle("XG-Boost Optimal Cutoff against Hour of Day") +
+  theme(axis.text.y=element_text(size=14),
+        axis.text.x=element_text(size=16),
+      axis.title=element_text(size=18),
+      title=element_text(size=20),
+      legend.position="none")
+```
+
+```{r}
+raw2 <- read.csv("Data/weekly_performance_trends1.csv", header=TRUE)
+raw2$Day <- factor(raw2$Day)
+ggplot(raw2, aes(x=Hour, y=Savings, colour=Day)) +
+  scale_color_discrete(h = c(150,300), c = 50, l = 60, h.start = 0) +
+  geom_point() +
+  geom_smooth(se=FALSE,method="lm")
+
+ggplot(raw2, aes(x=Hour, y=Savings)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  ggtitle("XGBoost Savings against Hour of Day")
+
+```
+

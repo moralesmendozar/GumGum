@@ -1,0 +1,152 @@
+---
+title: "Plotting XGBoost"
+author: "Jonathan Che"
+date: "August 4, 2016"
+output: html_document
+---
+
+```{r}
+library(xgboost)
+library(DiagrammeR)
+library(dplyr)
+# devtools::install_github("rich-iannone/DiagrammeR")
+# devtools::install_github("rich-iannone/DiagrammeRsvg")
+library(DiagrammeR)
+library(DiagrammeRsvg)
+library(magrittr)
+library(rsvg)
+library(stringi)
+library(data.table)
+library(ggplot2)
+```
+
+```{r}
+bar <- function(feature_names = NULL, model = NULL, n_first_tree = NULL, plot_width = NULL, plot_height = NULL, ...){
+  
+  if (class(model) != "xgb.Booster") {
+    stop("model: Has to be an object of class xgb.Booster model generaged by the xgb.train function.")
+  }
+
+  if (!requireNamespace("DiagrammeR", quietly = TRUE)) {
+    stop("DiagrammeR package is required for xgb.plot.tree", call. = FALSE)
+  }
+  
+  allTrees <- xgb.model.dt.tree(feature_names = feature_names, model = model, n_first_tree = n_first_tree)
+  
+  allTrees[, label:= paste0(Feature, "\nCover: ", Cover, "\nGain: ", Quality)]
+  allTrees[, shape:= "rectangle"][Feature == "Leaf", shape:= "oval"]
+  allTrees[, filledcolor:= "Beige"][Feature == "Leaf", filledcolor:= "Khaki"]
+  
+  # rev is used to put the first tree on top.
+  nodes <- DiagrammeR::create_nodes(nodes = allTrees[,ID] %>% rev,
+                 label = allTrees[,label] %>% rev,
+                 style = "filled",
+                 color = "DimGray",
+                 fillcolor= allTrees[,filledcolor] %>% rev,
+                 shape = allTrees[,shape] %>% rev,
+                 data = allTrees[,Feature] %>% rev,
+                 fontname = "Helvetica"
+                 )
+  
+  edges <- DiagrammeR::create_edges(from = allTrees[Feature != "Leaf", c(ID)] %>% rep(2),
+                        to = allTrees[Feature != "Leaf", c(Yes, No)],
+                        label = allTrees[Feature != "Leaf", paste("<",Split)] %>% c(rep("",nrow(allTrees[Feature != "Leaf"]))),
+                        color = "DimGray", 
+                        arrowsize = "1.5", 
+                        arrowhead = "vee",
+                        fontname = "Helvetica",
+                        rel = "leading_to")
+
+  graph <- DiagrammeR::create_graph(nodes_df = nodes,
+                        edges_df = edges,
+                        graph_attrs = "rankdir = LR")  %>%
+    export_graph("xgbpic.pdf")
+  
+  #DiagrammeR::render_graph(graph, width = plot_width, height = plot_height)
+}
+```
+
+```{r}
+bar2 <- function(model, feature_names = NULL, features_keep = 5, plot_width = NULL, plot_height = NULL, outputaddr, ...){
+  tree.matrix <- xgb.model.dt.tree(feature_names = feature_names, model = model)
+  
+  # first number of the path represents the tree, then the following numbers are related to the path to follow
+  # root init
+  root.nodes <- tree.matrix[stri_detect_regex(ID, "\\d+-0"), ID]
+  tree.matrix[ID %in% root.nodes, abs.node.position:=root.nodes]
+  
+  precedent.nodes <- root.nodes
+  
+  while(tree.matrix[,sum(is.na(abs.node.position))] > 0) {
+    yes.row.nodes <- tree.matrix[abs.node.position %in% precedent.nodes & !is.na(Yes)]
+    no.row.nodes <- tree.matrix[abs.node.position %in% precedent.nodes & !is.na(No)]
+    yes.nodes.abs.pos <- yes.row.nodes[, abs.node.position] %>% paste0("_0")
+    no.nodes.abs.pos <- no.row.nodes[, abs.node.position] %>% paste0("_1")
+    
+    tree.matrix[ID %in% yes.row.nodes[, Yes], abs.node.position := yes.nodes.abs.pos]
+    tree.matrix[ID %in% no.row.nodes[, No], abs.node.position := no.nodes.abs.pos]
+    precedent.nodes <- c(yes.nodes.abs.pos, no.nodes.abs.pos)
+  }
+  
+  tree.matrix[!is.na(Yes),Yes:= paste0(abs.node.position, "_0")]
+  tree.matrix[!is.na(No),No:= paste0(abs.node.position, "_1")]
+  
+  
+  
+  remove.tree <- . %>% stri_replace_first_regex(pattern = "^\\d+-", replacement = "")
+  
+  tree.matrix[,`:=`(abs.node.position=remove.tree(abs.node.position), Yes=remove.tree(Yes), No=remove.tree(No))]
+  
+  nodes.dt <- tree.matrix[,.(Quality = sum(Quality)),by = .(abs.node.position, Feature)][,.(Text =paste0(Feature[1:min(length(Feature), features_keep)], " (", Quality[1:min(length(Quality), features_keep)], ")") %>% paste0(collapse = "\n")), by=abs.node.position]
+  edges.dt <- tree.matrix[Feature != "Leaf",.(abs.node.position, Yes)] %>% list(tree.matrix[Feature != "Leaf",.(abs.node.position, No)]) %>% rbindlist() %>% setnames(c("From", "To")) %>% .[,.N,.(From, To)] %>% .[,N:=NULL]
+  
+  nodes <- DiagrammeR::create_nodes(nodes = nodes.dt[,abs.node.position],
+                                    label = nodes.dt[,Text],
+                                    style = "filled",
+                                    color = "DimGray",
+                                    fillcolor= "Beige",
+                                    shape = "oval",
+                                    fontname = "Helvetica"
+  )
+  
+  edges <- DiagrammeR::create_edges(from = edges.dt[,From],
+                                    to = edges.dt[,To],
+                                    color = "DimGray", 
+                                    arrowsize = "1.5", 
+                                    arrowhead = "vee",
+                                    fontname = "Helvetica",
+                                    rel = "leading_to")
+  
+  graph <- DiagrammeR::create_graph(nodes_df = nodes,
+                                    edges_df = edges,
+                                    graph_attrs = "rankdir = LR") %>%
+    export_graph(outputaddr)
+  
+  #DiagrammeR::render_graph(graph, width = plot_width, height = plot_height)  
+}
+```
+
+
+```{r}
+bst1 <- xgb.load("Data/xgbtemp.model")
+bar(feature_names = names, model = bst1, n_first_tree = 1)
+bar2(feature_names = names, model = bst1, features_keep = 5, outputaddr="xgbpic_multi_day.pdf")
+
+bst2 <- xgb.load("Data/xgb_weeksamp.model")
+bar2(feature_names = names, model = bst2, features_keep = 5, outputaddr="xgbpic_multi_week.pdf")
+```
+
+```{r}
+importance_matrix <- xgb.importance(names, model = bst1)
+
+blah <- importance_matrix %>%
+  filter(Gain > 0.005)
+ggplot(blah, aes(x=reorder(Feature, Gain), y=Gain)) +
+  geom_bar(stat="identity")
+
+blah <- importance_matrix %>%
+  filter(Cover > 0.01)
+ggplot(blah, aes(x=reorder(Feature, Cover), y=Cover)) +
+  geom_bar(stat="identity")
+```
+

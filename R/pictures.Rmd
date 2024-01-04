@@ -1,0 +1,651 @@
+---
+title: "Making Pretty Pictures"
+output: html_document
+---
+
+```{r, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(mosaic)
+```
+
+Sandbox for pictures...
+
+```{r}
+#Optimal XGB over all data
+data <- read.csv("Data/OptimalXGB.csv")
+sd(data$Savings)
+mean(data$Savings)
+data2 <- data %>%
+  filter(Savings < 40000)
+sd(data2$Savings)
+mean(data2$Savings)
+
+bwplot(data2$Savings)
+bwplot(Type~Savings,
+       scales=list(tck=c(1,0), x=list(cex=1.2), y=list(cex=1.5)),
+       par.settings = list(box.umbrella=list(col= c("dodgerblue2", "indianred2")), 
+                           box.dot=list(col= c("dodgerblue2", "indianred2")), 
+                           box.rectangle = list(col= c("dodgerblue2", "indianred2"))),
+       data=data)
+
+ggplot(data, aes(x=Type, y=Savings, colour=Type)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_color_manual(values=c("indianred2","dodgerblue2")) +
+  ylab("") +
+  xlab("") +
+  theme(axis.text.x=element_text(size=30),
+        legend.position="none")
+
+data <- read.csv("Data/OptimalXGB2.csv")
+ggplot(data, aes(x=Type, y=Savings, colour=Type)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_color_manual(values=c("indianred2","dodgerblue2")) +
+  ggtitle("Spread of Net Savings Values") +
+  xlab("Training Method") +
+  ylab("Net Monthly Savings") +
+  theme(axis.text.y=element_text(size=16),
+        axis.text.x=element_text(size=16),
+        axis.title=element_text(size=20),
+        title=element_text(size=22),
+        legend.position="none")
+
+
+bar <- data %>%
+  group_by(Month, Day, Type) %>%
+  summarise(Average = mean(Savings),
+            SD = sd(Savings),
+            Cumulative_Day = mean(Cumulative_Day))
+ggplot(bar, aes(x=Cumulative_Day, y=Average, group=Type, colour=Type)) +
+  geom_line() +
+  scale_color_manual(values=c("indianred2","dodgerblue2")) +
+  ylab("") +
+  xlab("") +
+  ylim(c(0,67000)) +
+  scale_x_continuous(breaks=c(2,15,32,46),labels=c('May 2','May 15','June 1','June 15')) +
+  geom_vline(xintercept = 32, colour="gray", linetype = "longdash") +
+  theme(axis.text=element_text(size=18),
+        legend.position="none")
+
+bar <- bar %>%
+  filter(Type=="optimal_cut")
+ggplot(bar, aes(x=Cumulative_Day, y=Average)) +
+  geom_line() +
+  ylab("Net Monthly Savings (Daily Averages)") +
+  xlab("Date") +
+  ggtitle("Performance of XGBoost over Time") +
+  ylim(c(0,67000)) +
+  scale_x_continuous(breaks=c(2,15,32,46),labels=c('May 2','May 15','June 1','June 15')) +
+  geom_vline(xintercept = 32, colour="gray", linetype = "longdash") +
+  theme(axis.text=element_text(size=14),
+        axis.title=element_text(size=18),
+        title=element_text(size=20),
+        legend.position="none")
+```
+
+```{r, eval=FALSE}
+# PLot impression success rate by DSP and Vertical ID
+vdsp <- full %>%
+  select(vertical, dsp, realwinner) %>%
+  group_by(dsp, vertical) %>%
+  summarize(num=n(), prop = sum(realwinner)/n())
+ggplot(vdsp, aes(vertical, dsp)) +
+  geom_tile(aes(fill = prop)) +
+  scale_fill_gradient(low="white",high="red")
+```
+
+```{r}
+#Oversampled XGB
+data <- read.csv("Data/foo.csv")
+ggplot(data, aes(x=hour_of_week, y=score)) +
+  geom_line(colour="dodgerblue2") +
+  scale_x_continuous(breaks=c(0,24,48,72,96,120,144,168),labels=c('June 19','June 20','June 21','June 22','June 23','June 24','June 25','June 26')) +
+  geom_vline(xintercept = c(0,24,48,72,96,120,144,168), colour="gray", linetype = "longdash") +
+  ggtitle("") +
+  ylab("") +
+  ylim(c(0,35000)) +
+  xlab("") +
+  theme(axis.text=element_text(size=18))
+
+data <- read.csv("Data/hourly_125.csv")
+ggplot(data, aes(x=hour_of_week, y=score)) +
+  geom_line(colour="dodgerblue2") +
+  scale_x_continuous(breaks=c(0,24,48,72,96,120,144,168),labels=c('June 19','June 20','June 21','June 22','June 23','June 24','June 25','June 26')) +
+  geom_vline(xintercept = c(0,24,48,72,96,120,144,168), colour="gray", linetype = "longdash") +
+  ggtitle("") +
+  ylab("") +
+  ylim(c(0,35000)) +
+  xlab("") +
+  theme(axis.text=element_text(size=18))
+
+
+# Multiple lines
+data <- read.csv("Data/foo2.csv")
+data$type <- as.factor(data$type)
+
+ggplot(data, aes(x=hour_of_week, y=score, colour=type, group=type)) +
+  geom_line() +
+  scale_x_continuous(breaks=c(0,24,48,72,96,120,144,168),labels=c('June 19','June 20','June 21','June 22','June 23','June 24','June 25','June 26')) +
+  #geom_vline(xintercept = c(24,48,72,96,120,144,168), colour="gray", linetype = "longdash") +
+  annotate("rect", xmin = 17, xmax = 24, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 41, xmax = 48, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 65, xmax = 72, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 89, xmax = 96, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 113, xmax = 120, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 137, xmax = 144, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 161, xmax = 168, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  ggtitle("XG-Boost Performance over Time") +
+  ylab("Net Monthly Savings") +
+  ylim(c(0,35000))+
+  xlab("") +
+  scale_color_manual(values=c("dodgerblue2","indianred2"),
+                     breaks=c("Optimal", "0.15"))+
+  theme(axis.text.x=element_text(size=18),
+        axis.text.y=element_text(size=14),
+        title=element_text(size=20),
+        axis.title=element_text(size=18),
+        legend.text=element_text(size=16),
+        legend.title=element_text(size=18))
+
+data2 <- data %>%
+  filter(type =="daily")
+ggplot(data2, aes(x=hour_of_week, y=score)) +
+  #geom_rect(aes(xmin=24, xmax=48, ymin=0, ymax=Inf, fill='grey50'))+
+  geom_line(colour="dodgerblue2") +
+  scale_x_continuous(breaks=c(0,24,48,72,96,120,144,168),labels=c('June 19','June 20','June 21','June 22','June 23','June 24','June 25','June 26')) +
+  #geom_vline(xintercept = c(0,17,24,41,48,65,72,89,96,113,120,134,144,161,168), colour="gray", linetype = "longdash") +
+  annotate("rect", xmin = 17, xmax = 24, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 41, xmax = 48, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 65, xmax = 72, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 89, xmax = 96, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 113, xmax = 120, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 137, xmax = 144, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  annotate("rect", xmin = 161, xmax = 168, ymin = -Inf, ymax = Inf,
+        alpha = .2) +
+  ggtitle("XG-Boost Performance over Time") +
+  ylab("Net Monthly Savings") +
+  ylim(c(0,35000)) +
+  xlab("") +
+  theme(axis.text.x=element_text(size=18),
+        axis.text.y=element_text(size=14),
+        title=element_text(size=20),
+        axis.title=element_text(size=18))
+```
+
+
+```{r}
+#No labels
+data <- read.csv("Data/OptimalXGB.csv")
+data$Type <- as.factor(data$Type)
+data <- data %>%
+  filter(Month == 6) %>%
+  filter(Day > 18) %>%
+  mutate(Cumulative_Hour = Cumulative_Hour - 1128)
+ggplot(data, aes(x=Cumulative_Hour, y=Savings, colour=Type, group=Type)) +
+  geom_line(size=1) +
+  scale_x_continuous(breaks=c(0,24,48,72,96,120,144,168),labels=c('June 19','June 20','June 21','June 22','June 23','June 24','June 25','June 26')) +
+  geom_vline(xintercept = c(24,48,72,96,120,144,168), colour="gray", linetype = "longdash") +
+  ggtitle("") +
+  ylab("") +
+  ylim(c(0,35000))+
+  xlab("") +
+  scale_color_manual(values=c("indianred2", "dodgerblue2"),
+                     breaks=c("Optimal", "0.15"))+
+  theme(axis.text.x=element_text(size=20),
+        axis.text.y=element_text(size=18))
+
+```
+
+```{r}
+#KBest_Feature_Importance_Count.csv
+data <- read.csv("Data/KBest_Feature_Importance_Count_Top1000.csv")
+tally(data$count)
+
+foo <- data %>%
+  filter(feature <=60) %>%
+  filter(feature >= 0)
+tally(foo$count)
+
+foo <- data %>%
+  filter(feature <=258) %>%
+  filter(feature >= 91)
+tally(foo$count)
+
+#Country
+foo <- data %>%
+  filter(feature >= 259) %>%
+  filter(feature <= 267)
+tally(foo$count)
+
+#Region
+foo <- data %>%
+  filter(feature <= 587) %>%
+  filter(feature >= 268)
+tally(foo$count)
+
+foo <- data %>%
+  filter(feature <= 688) %>%
+  filter(feature >= 603)
+tally(foo$count)
+
+
+#Bluekai
+foo <- data %>%
+  filter(feature <= 1120) %>%
+  filter(feature >= 689)
+tally(foo$count)
+
+#Sitecat
+foo <- data %>%
+  filter(feature >= 1125) %>%
+  filter(feature <= 1151)
+tally(foo$count)
+#PCat
+foo <- data %>%
+  filter(feature >= 1152) %>%
+  filter(feature <= 1178)
+tally(foo$count)
+
+#Domain
+foo <- data %>%
+  filter(feature <= 2403) %>%
+  filter(feature >= 1179)
+tally(foo$count)
+```
+
+
+```{r}
+# Plotting XGBoost learning curves
+data <- read.csv("Data/XGB-Learning-Curve-CV-MoreData.csv")
+ggplot(data, aes(x=size, y=score, color=type, group=type)) +
+  geom_line()+
+  ggtitle("Learning Curve for XG-Boost") +
+  ylab("Net Savings") +
+  xlab("Number of Samples in Training Set") +
+  scale_color_manual(values=c("indianred2","dodgerblue2"),
+                     breaks=c("d","e"))+
+  theme(axis.text=element_text(size=14),
+        axis.title=element_text(size=20),
+        title=element_text(size=25),
+        legend.text=element_text(size=16),
+        legend.title=element_text(size=18))
+
+
+ggplot(data, aes(numrounds)) +
+  geom_line(aes(y=train, color="train")) +
+  geom_line(aes(y=test, color="test")) +
+  ggtitle("XGBoost Learning Curve") +
+  ylab("Net Savings") +
+  xlab("Size of Training Set") +
+  scale_color_discrete(name="Key",
+                         breaks=c("train", "test"),
+                         labels=c("Training Set", "Evaluation Set")) +
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=14))
+```
+
+```{r}
+# Success rate by minute
+foo <- filtered %>%
+  mutate(winner = !is.na(winner))
+time <- foo %>%
+  group_by(hour, minute) %>%
+  summarize(num = n(), winners = sum(winner), winrate = sum(winner)/n())
+time <- time %>%
+  mutate(cumulative = hour*60+minute)
+ggplot(time, aes(x=cumulative, y=winrate)) +
+  geom_bar(stat="identity")
+
+time2 <- foo %>%
+  group_by(hour) %>%
+  summarize(num = n(), winners = sum(winner), winrate = sum(winner)/n())
+ggplot(time2, aes(x=hour, y=winrate)) +
+  geom_bar(stat="identity")
+```
+
+```{r}
+# Plot impression success rate by DSP
+dspwin <- filtered %>%
+  select(dsp, winner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(dspwin, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+
+# Plot impression response rate by DSP
+dsprespond <- filtered %>%
+  select(dsp, winner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(!is.na(winner))/n(),3)) %>%
+  arrange(prop)
+ggplot(dsprespond, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("DSP Response Rate") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nImpressions Responded to", reverse=TRUE))
+```
+
+```{r}
+# Plot impression success rate by DSP, for impressions with bluekai data
+bkdsp <- full %>%
+  filter(bluekai)
+bkdsp <- bkdsp %>%
+  select(dsp, realwinner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(realwinner)/n(),3)) %>%
+  arrange(prop)
+ggplot(bkdsp, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+```
+
+```{r}
+# Distribution of tmax
+foo <- filtered %>%
+  filter(tmax < 200) %>%
+  filter(tmax > 0)
+ggplot(foo, aes(tmax)) +
+  geom_histogram(binwidth=10) +
+  ggtitle("Distribution of TMax (Excluding <0 or >200)") +
+  xlab("TMax") +
+  ylab("Count") + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18))
+
+# Distribution of Margin
+ggplot(filtered2, aes(margin)) +
+  geom_histogram(binwidth=.1) +
+  ggtitle("Distribution of Margin") +
+  xlab("Margin") +
+  ylab("Count") + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18))
+
+# Distribution of Bid Floor
+foo <- filtered2 %>%
+  filter(bidfloor < 10)
+ggplot(foo, aes(bidfloor)) +
+  geom_histogram(binwidth=.25) +
+  ggtitle("Distribution of Bid Floor (<$10)") +
+  xlab("Bid Floor") +
+  ylab("Count") + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18))
+```
+
+```{r}
+# Win rate by Country
+filtered2 <- filtered %>%
+  mutate(country = ifelse(country == "US" | country == "GB" |
+                          country == "CA" | country == "DE" |
+                          country == "FR" | country == "MX",
+                          country, "other")) %>%
+  select(country, winner) %>%
+  group_by(country) %>%
+  summarise(num = n(),
+            prop = round(sum(winner, na.rm=TRUE)/n(),3))
+filtered2 <- filtered2[1:7,]
+ggplot(filtered2, aes(x=reorder(country,num), y=num, label=prop, fill=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Distribution of Countries") +
+  xlab("Country") +
+  ylab("Sqrt Count") + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18)) + 
+  guides(fill=guide_legend(title="Proportion of \nImpressions Responded to", reverse=TRUE))
+
+# Win rate by DSP
+foo <- filtered2 %>%
+  select(bluekai, winner) %>%
+  group_by(bluekai) %>%
+  summarise(n=n(),
+            prop = round(sum(winner)/n(),3))
+ggplot(foo, aes(x=bluekai, y=n, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  ggtitle("Proportion of Winners vs. BlueKai") +
+  xlab("BlueKai Data Exists") +
+  ylab("Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE)) + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18))
+```
+
+```{r}
+# Height/Width of impressions
+filtered <- filtered %>%
+  mutate(winner = !is.na(winner))
+foo <- filtered %>%
+  select(width, height, winner) %>%
+  group_by(width, height) %>%
+  summarize(n = n(),
+            winprop = sum(winner)/n())
+foo <- foo %>%
+  mutate(prop = n/sum(foo$n))
+
+ggplot(foo, aes(x=width, y=height, size = prop, color = winprop)) +
+  geom_point() +
+  ggtitle("Height vs. Width of Ad Impressions") +
+  xlab("Width") +
+  ylab("Height") +
+  guides(size=guide_legend(title="Proportion of \nImpressions", reverse=TRUE),
+         color=guide_legend(title="Win Proportion", reverse=TRUE)) + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18),
+        legend.text=element_text(size=13),
+        legend.title=element_text(size=16)) +
+  scale_size_continuous(range = c(5, 20))
+
+ggplot(foo, aes(x=width, y=height, size = prop)) +
+  geom_point() +
+  ggtitle("Height vs. Width of Ad Impressions") +
+  xlab("Width (in pixels)") +
+  ylab("Height (in pixels)") +
+  guides(size=guide_legend(title="Proportion of \nBid Requests", reverse=TRUE)) + 
+  theme(plot.title=element_text(size=25, face="bold", margin=margin(b=15)),
+        axis.title.x=element_text(size=22, margin=margin(t=10)),
+        axis.title.y=element_text(size=22, margin=margin(r=15)),
+        axis.text=element_text(size=18),
+        legend.text=element_text(size=18),
+        legend.title=element_text(size=19)) +
+  scale_size_continuous(range = c(5, 15))
+```
+
+```{r}
+# Impressions per hour/day
+foo <- full %>%
+  select(date, hour, month) %>%
+  filter(month == 6) %>%
+  filter(date >=19)
+foo <- foo %>%
+  group_by(date, hour) %>%
+  summarise(num = n())
+foo <- foo %>%
+  mutate(hourofweek = (date-19)*24+hour)
+ggplot(foo, aes(x=hourofweek, y=num)) +
+  geom_bar(stat="identity")
+
+# Auctions per hour/day
+g_auc <- smallfull %>%
+  group_by(Auction) %>%
+  summarize(num=n(),
+            dayofweek=unique(dayofweek),
+            hour=unique(hour),
+            month=unique(month))
+ggplot(g_auc, aes(x=dayofweek)) +
+  geom_bar()
+```
+
+```{r}
+# Response rate by day of week
+foo <- filtered2 %>%
+  select(dayofweek, winner) %>%
+  group_by(dayofweek) %>%
+  summarise(num = n(),
+            prop = round(sum(winner)/n(),3))
+ggplot(foo, aes(x=dayofweek, y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  ggtitle("Success of Impressions by Day of Week") +
+  xlab("Day of Week (Sun-Sat)") +
+  ylab("Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE)) + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18))
+
+# Impression response rate by date
+may <- filtered %>%
+  filter(month == "5") %>%
+  group_by(date) %>%
+  summarize(num=n(),
+            prop = round(sum(winner, na.rm=TRUE)/n(),3))
+ggplot(may, aes(x=date, y=prop)) +
+  geom_bar(stat="identity")
+
+# Impression response rate by date
+june <- filtered %>%
+  filter(month == "6") %>%
+  group_by(date) %>%
+  summarize(num=n(),
+            prop = round(sum(winner, na.rm=TRUE)/n(),3))
+ggplot(june, aes(x=date, y=prop)) +
+  geom_bar(stat="identity")
+```
+
+```{r}
+# Success rate by month
+foo <- filtered %>%
+  select(month, winner) %>%
+  group_by(month) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3))
+foo[1,1] <- "May"
+foo[2,1] <- "June"
+ggplot(foo, aes(x=reorder(month, prop), y=prop)) +
+  geom_bar(stat="identity", fill="#3d78d6") +
+  ggtitle("Bid Request Success Rate by Month") +
+  xlab("") +
+  ylab("Proportion of Successful Bid Requests\n") + 
+  guides(fill=FALSE) +
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=16),
+        axis.text=element_text(size=15))
+```
+
+```{r}
+# Checking out bidfloor - margin
+foo <- filtered %>%
+  mutate(original_price = bidfloor - margin)
+bar <- foo %>%
+  filter(original_price < 2)   # One greater than 1000
+ggplot(bar, aes(x=original_price)) +
+  geom_histogram(binwidth=.1)
+bar <- foo %>%
+  mutate(nonzero = original_price != 0)
+tally(bar$nonzero)
+```
+
+```{r}
+# Height/Width of impression, based on whether they're mobile or not
+tally(filtered$device)
+mobile <- filtered %>%
+  filter(device == "2")
+nonmobile <- filtered %>%
+  filter(device == "1")
+
+tally(mobile$winner, format='proportion')
+tally(nonmobile$winner, format='proportion')
+
+foo <- mobile %>%
+  select(width, height, winner) %>%
+  group_by(width, height) %>%
+  summarize(n = n(),
+            winprop = sum(winner, na.rm=TRUE)/n())
+foo <- foo %>%
+  mutate(prop = n/sum(foo$n))
+
+bar <- nonmobile %>%
+  select(width, height, winner) %>%
+  group_by(width, height) %>%
+  summarize(n = n(),
+            winprop = sum(winner, na.rm=TRUE)/n())
+bar <- bar %>%
+  mutate(prop = n/sum(bar$n))
+
+ggplot(bar, aes(x=width, y=height, size = prop, color = winprop)) +
+  geom_point() +
+  ggtitle("Height vs. Width of Ad Impressions") +
+  xlab("Width") +
+  ylab("Height") +
+  guides(size=guide_legend(title="Proportion of \nImpressions", reverse=TRUE),
+         color=guide_legend(title="Win Proportion", reverse=TRUE)) + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18),
+        legend.text=element_text(size=13),
+        legend.title=element_text(size=16)) +
+  scale_size_continuous(range = c(5, 20))
+```
+
+#Hourly Data, using bidcount.ods
+
+```{r}
+library(readr)
+df <- read_csv("Data/bidcount.ods", col_names = FALSE)
+hour <- data.frame(rep(0:23, 22))
+day <- rep(4,24)
+for(i in 5:25){
+  day <- append(day, rep(i, 24))
+}
+day <- data.frame(day)
+df <- bind_cols(df, hour, day)
+names(df) <- c("None", "One", "More", "Hour", "Day")
+
+foo <- df %>%
+  group_by(Day) %>%
+  summarize(num=sum(None+One+More), prop=round(sum(One+More)/num, 3))
+ggplot(foo, aes(x=Day, y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  ggtitle("Auction Success by Day (June)") +
+  xlab("Day") +
+  ylab("Number of Auctions") +
+  guides(fill=guide_legend(title="Proportion of \nAuctions Bid on", reverse=TRUE)) + 
+  theme(plot.title=element_text(size=20, face="bold"),
+        axis.title=element_text(size=18))
+
+
+ggplot(foo, aes(x=Day, y=prop)) +
+  geom_bar(stat="identity")
+```

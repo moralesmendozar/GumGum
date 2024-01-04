@@ -1,0 +1,466 @@
+---
+title: "Finding differences between May and June"
+output: html_document
+---
+
+```{r}
+text <- read_file("Data/data0.txt")
+maylist <- unlist(strsplit(text, "\n"))   #One auction per row
+may <- sample(maylist, size=10000, replace=FALSE)
+
+text <- read_file("Data/newdata0.txt")
+junelist <- unlist(strsplit(text, "\n"))   #One auction per row
+june <- sample(junelist, size=10000, replace=FALSE)
+```
+
+
+
+```{r}
+mayevent <- may %>% as.tbl_json %>%
+  enter_object("em") %>%
+  spread_values(timestamp = jnumber("t"),
+                country = jstring("cc"),
+                region = jstring("rg"))
+mayevent <- mayevent %>%
+  mutate(timestamp = round(timestamp, 10)/1000) %>%   # Cut off milliseconds
+  mutate(timestamp = as.POSIXct(timestamp, origin = "1970-01-01",tz = "GMT")) %>%
+  mutate(dayofweek = wday(timestamp)) %>%
+  mutate(hour = hour(timestamp)) %>%
+  mutate(month = month(timestamp)) %>%
+  select(-timestamp)
+
+mayauction <- may %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  spread_values(margin = jnumber("margin"),
+                tmax = jnumber("tmax")) %>%
+  enter_object("user") %>%
+  spread_values(bluekai = jstring("bkc"))
+mayauction <- mayauction %>%
+  mutate(bluekai = !is.na(bluekai))
+
+maysite <- may %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("site") %>%
+  spread_values(sitetype = jstring("typeid"),
+                sitecat = jstring("cat")) %>%
+  enter_object("publisher") %>%
+  spread_values(pubID = jstring("id"))
+
+
+maybidreq <- may %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array() %>%
+  spread_values(reqID = jstring("id"),
+                vertical = jstring("verticalid"),
+                dsp = jstring("bidderid")) %>%
+  enter_object("impressions") %>%
+  gather_array() %>%
+  spread_values(bidfloor = jnumber("bidfloor"),
+                adformat = jstring("format"),
+                adproduct = jstring("product"))   # array.index is impID
+                                                  # ignore bid requests w/o impressions
+maybanner <- may %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array() %>%
+  spread_values(reqID = jstring("id")) %>%
+  enter_object("impressions") %>%
+  gather_array() %>%
+  enter_object("banner") %>%
+  spread_values(width = jnumber("w"),
+                height = jnumber("h"))   # array.index is impID
+
+maybid <- may %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bids") %>%
+  gather_array %>%
+  spread_values(reqID = jstring("requestid"),
+                array.index = jstring("impid"),
+                winner = jstring("winner"))
+maybid <- maybid %>%
+  mutate(winner = !is.na(winner))   #response is win
+
+maybanner <- maybanner %>%
+  select(-document.id)
+maybid <- maybid %>%
+  select(-document.id)
+
+foo <- maybidreq %>%
+  left_join(maybanner, by=c("reqID", "array.index")) %>%
+  left_join(maybid, by=c("reqID", "array.index"))
+
+mayfull <- foo %>%
+  left_join(mayevent, by="document.id") %>%
+  left_join(mayauction, by="document.id") %>%
+  left_join(maysite, by="document.id") %>%
+  rename(Auction=document.id, BidReq=array.index)
+mayfull <- mayfull %>%
+  select(-reqID)
+mayfull <- mayfull[c("Auction","country","region","dayofweek","hour","month",
+                         "margin","tmax","bluekai","sitetype","sitecat","pubID",
+                         "BidReq","dsp","vertical",
+                         "bidfloor","adformat","adproduct","width","height","winner")]
+
+mayfull <- mayfull %>%
+  filter(dsp != "35" & dsp != "37") %>%   # Filter out DSPs we should ignore
+  filter(adformat != "1" &   # Filter out Ad Formats we should ignore
+           adformat != "2" &
+           adformat != "3" &
+           adformat != "4" &
+           adformat != "6" &
+           adformat != "7" &
+           adformat != "20" &
+           adformat != "21" &
+           adformat != "22" & 
+           adformat != "25" & 
+           adformat != "26")
+```
+
+
+```{r}
+juneevent <- june %>% as.tbl_json %>%
+  enter_object("em") %>%
+  spread_values(timestamp = jnumber("t"),
+                country = jstring("cc"),
+                region = jstring("rg"))
+juneevent <- juneevent %>%
+  mutate(timestamp = round(timestamp, 10)/1000) %>%   # Cut off milliseconds
+  mutate(timestamp = as.POSIXct(timestamp, origin = "1970-01-01",tz = "GMT")) %>%
+  mutate(dayofweek = wday(timestamp)) %>%
+  mutate(hour = hour(timestamp)) %>%
+  mutate(month = month(timestamp)) %>%
+  select(-timestamp)
+
+juneauction <- june %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  spread_values(margin = jnumber("margin"),
+                tmax = jnumber("tmax")) %>%
+  enter_object("user") %>%
+  spread_values(bluekai = jstring("bkc"))
+juneauction <- juneauction %>%
+  mutate(bluekai = !is.na(bluekai))
+
+junesite <- june %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("site") %>%
+  spread_values(sitetype = jstring("typeid"),
+                sitecat = jstring("cat")) %>%
+  enter_object("publisher") %>%
+  spread_values(pubID = jstring("id"))
+
+
+junebidreq <- june %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array() %>%
+  spread_values(reqID = jstring("id"),
+                vertical = jstring("verticalid"),
+                dsp = jstring("bidderid")) %>%
+  enter_object("impressions") %>%
+  gather_array() %>%
+  spread_values(bidfloor = jnumber("bidfloor"),
+                adformat = jstring("format"),
+                adproduct = jstring("product"))   # array.index is impID
+                                                  # ignore bid requests w/o impressions
+junebanner <- june %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array() %>%
+  spread_values(reqID = jstring("id")) %>%
+  enter_object("impressions") %>%
+  gather_array() %>%
+  enter_object("banner") %>%
+  spread_values(width = jnumber("w"),
+                height = jnumber("h"))   # array.index is impID
+
+junebid <- june %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bids") %>%
+  gather_array %>%
+  spread_values(reqID = jstring("requestid"),
+                array.index = jstring("impid"),
+                winner = jstring("winner"))
+junebid <- junebid %>%
+  mutate(winner = !is.na(winner))   #response is win
+
+junebanner <- junebanner %>%
+  select(-document.id)
+junebid <- junebid %>%
+  select(-document.id)
+
+foo <- junebidreq %>%
+  left_join(junebanner, by=c("reqID", "array.index")) %>%
+  left_join(junebid, by=c("reqID", "array.index"))
+
+junefull <- foo %>%
+  left_join(juneevent, by="document.id") %>%
+  left_join(juneauction, by="document.id") %>%
+  left_join(junesite, by="document.id") %>%
+  rename(Auction=document.id, BidReq=array.index)
+junefull <- junefull %>%
+  select(-reqID)
+junefull <- junefull[c("Auction","country","region","dayofweek","hour","month",
+                         "margin","tmax","bluekai","sitetype","sitecat","pubID",
+                         "BidReq","dsp","vertical",
+                         "bidfloor","adformat","adproduct","width","height","winner")]
+
+junefull <- junefull %>%
+  filter(dsp != "35" & dsp != "37") %>%   # Filter out DSPs we should ignore
+  filter(adformat != "1" &   # Filter out Ad Formats we should ignore
+           adformat != "2" &
+           adformat != "3" &
+           adformat != "4" &
+           adformat != "6" &
+           adformat != "7" &
+           adformat != "20" &
+           adformat != "21" &
+           adformat != "22" & 
+           adformat != "25" & 
+           adformat != "26")
+```
+
+# Examining winrates
+
+Overall, our conclusion is that June winrates are much higher than May winrates.
+
+```{r}
+dim(mayfull)[1]
+dim(junefull)[1]
+```
+There are significantly more impressions per auction in May than there are in June
+
+```{r}
+tally(mayfull$winner, format="proportion")
+tally(junefull$winner, format="proportion")
+```
+It definitely seems like June impressions are more likely to win
+
+```{r}
+foo <- mayfull %>%
+  group_by(Auction) %>%
+  summarize(winner=sum(winner, na.rm=TRUE))
+tally(foo$winner)
+
+bar <- junefull %>%
+  group_by(Auction) %>%
+  summarize(winner=sum(winner, na.rm=TRUE))
+tally(bar$winner)
+```
+June auctions are more likely to win too. With fewer impressions per auction, this is surprising.
+
+# Examining distributions
+
+```{r}
+# Plot impression success rate by DSP
+foo <- mayfull %>%
+  select(dsp, winner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(foo, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+
+# Plot impression success rate by DSP
+bar <- junefull %>%
+  select(dsp, winner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(bar, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+```
+
+```{r}
+# Plot impression success rate by DSP
+foo <- mayfull %>%
+  select(dsp, winner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(foo, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+
+# Plot impression success rate by DSP
+bar <- junefull %>%
+  select(dsp, winner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(bar, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+```
+
+```{r}
+foo <- mayfull %>%
+  select(hour, winner) %>%
+  group_by(hour) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3))
+ggplot(foo, aes(x=hour, y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1)
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+  
+tally(mayfull$hour)
+
+bar <- junefull %>%
+  select(hour, winner) %>%
+  group_by(hour) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3))
+ggplot(bar, aes(x=hour, y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) + 
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+  
+  scale_fill_gradient2(mid="#818285", high="#F2B518")
+```
+
+```{r}
+foo <- mayfull %>%
+  select(country, winner) %>%
+  group_by(country) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3))
+foo <- foo %>%
+  filter(num > 100)
+ggplot(foo, aes(x=country, y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1)
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+  
+tally(mayfull$hour)
+
+bar <- junefull %>%
+  select(country, winner) %>%
+  group_by(country) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3))
+bar <- bar %>%
+  filter(num > 100)
+ggplot(bar, aes(x=country, y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) + 
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+```
+
+```{r}
+foo <- mayfull %>%
+  filter(tmax < 200)
+ggplot(mayfull, aes(tmax)) +
+  geom_histogram()
+ggplot(foo, aes(tmax)) +
+  geom_histogram(bins=10)
+
+bar <- junefull %>%
+  filter(tmax < 200)
+ggplot(junefull, aes(tmax)) +
+  geom_histogram()
+ggplot(bar, aes(tmax)) +
+  geom_histogram(bins=10)
+```
+```{r}
+ggplot(mayfull, aes(margin)) +
+  geom_histogram()
+ggplot(junefull, aes(margin)) +
+  geom_histogram()
+```
+
+```{r}
+foo <- mayfull %>%
+  select(adformat, winner) %>%
+  group_by(adformat) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(foo, aes(x=reorder(adformat, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+
+bar <- junefull %>%
+  select(adformat, winner) %>%
+  group_by(adformat) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(bar, aes(x=reorder(adformat, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+```
+
+```{r}
+foo <- mayfull %>%
+  select(sitetype, winner) %>%
+  group_by(sitetype) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(foo, aes(x=reorder(sitetype, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+
+bar <- junefull %>%
+  select(sitetype, winner) %>%
+  group_by(sitetype) %>%
+  summarize(num=n(), prop = round(sum(winner, na.rm=TRUE)/n(),3)) %>%
+  arrange(prop)
+ggplot(bar, aes(x=reorder(sitetype, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+```
+
+```{r}
+
+```
+
+

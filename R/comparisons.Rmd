@@ -1,0 +1,51 @@
+---
+title: "Good vs. Bad"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+# Assuming filtered is already loaded in
+library(dplyr)
+library(mosaic)
+resp <- filtered %>%
+  mutate(winner = !is.na(winner))
+good <- resp %>%
+  filter(winner == TRUE)   # We look at differences between bid requests that were and weren't responded to
+bad <- resp %>%
+  filter(winner == FALSE)
+```
+
+```{r}
+# Examining bidfloor
+foo <- resp %>%
+  filter(bidfloor < 30)
+bwplot(winner~bidfloor, data=foo)
+t.test(good$bidfloor~bad$bidfloor)
+```
+
+```{r}
+foo <- resp %>%
+  filter(tmax < 400)
+bwplot(winner~tmax, data=foo)
+bar <- resp %>%
+  filter(tmax > 400) %>%
+  filter(tmax < 4000)
+bwplot(winner~tmax, data=bar)
+tally(resp$winner~resp$tmax)
+```
+
+```{r}
+foo <- resp %>%
+  group_by(dayofweek) %>%
+  summarize(win = sum(winner),
+            lose = n() - sum(winner))
+bar <- foo %>%
+  mutate(win = round(win / sum(win),3),
+         lose = round(lose / sum(lose),3))
+chisq.test(foo)
+```
+

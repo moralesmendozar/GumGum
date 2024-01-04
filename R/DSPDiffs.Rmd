@@ -1,0 +1,19 @@
+---
+title: "Differences Between DSPs"
+output: html_document
+---
+
+#Do different DSPs bid on different things?
+
+What are potential "things"?
+- Time
+- Margins/Floors
+- Verticalid
+- (Siteid) lots of sites...
+- Typeid
+- Bid price
+
+```{r}
+
+```
+

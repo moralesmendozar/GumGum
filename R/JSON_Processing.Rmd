@@ -1,0 +1,148 @@
+---
+title: "Processing JSON"
+output: html_document
+---
+
+#Collecting Data
+
+```{r, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(mosaic)
+library(tidyjson)
+library(readr)
+library(lubridate)
+```
+
+```{r}
+text <- read_file("Data/newdata0.txt")
+list <- unlist(strsplit(text, "\n"))   #One auction per row
+small <- sample(list, size=5000, replace=FALSE)
+```
+
+#Processing Data
+
+```{r}
+smallevent <- small %>% as.tbl_json %>%
+  enter_object("em") %>%
+  spread_values(timestamp = jnumber("t"),
+                country = jstring("cc"),
+                region = jstring("rg"))
+smallevent <- smallevent %>%
+  mutate(timestamp = round(timestamp, 10)/1000) %>%   # Cut off milliseconds
+  mutate(timestamp = as.POSIXct(timestamp, origin = "1970-01-01",tz = "GMT")) %>%
+  mutate(dayofweek = wday(timestamp)) %>%
+  mutate(hour = hour(timestamp)) %>%
+  mutate(month = month(timestamp)) %>%
+  mutate(date = day(timestamp)) %>%
+  select(-timestamp)
+
+smallauction <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  spread_values(margin = jnumber("margin"),
+                tmax = jnumber("tmax")) %>%
+  enter_object("user") %>%
+  spread_values(bluekai = jstring("bkc"))
+smallauction <- smallauction %>%
+  mutate(bluekai = !is.na(bluekai))
+
+smallsite <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("site") %>%
+  spread_values(sitetype = jstring("typeid"),
+                sitecat = jstring("cat")) %>%
+  enter_object("publisher") %>%
+  spread_values(pubID = jstring("id"))
+
+
+smallbidreq <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array() %>%
+  spread_values(reqID = jstring("id"),
+                vertical = jstring("verticalid"),
+                dsp = jstring("bidderid")) %>%
+  enter_object("impressions") %>%
+  gather_array() %>%
+  spread_values(bidfloor = jnumber("bidfloor"),
+                adformat = jstring("format"),
+                adproduct = jstring("product"))   # array.index is impID
+                                                  # ignore bid requests w/o impressions
+smallbanner <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bidrequests") %>%
+  gather_array() %>%
+  spread_values(reqID = jstring("id")) %>%
+  enter_object("impressions") %>%
+  gather_array() %>%
+  enter_object("banner") %>%
+  spread_values(width = jnumber("w"),
+                height = jnumber("h"))   # array.index is impID
+
+smallbid <- small %>% as.tbl_json %>%
+  enter_object("auction") %>%
+  enter_object("bids") %>%
+  gather_array %>%
+  spread_values(reqID = jstring("requestid"),
+                array.index = jstring("impid"),
+                winner = jstring("winner"))
+smallbid <- smallbid %>%
+  mutate(winner = !is.na(winner))   #response is win
+
+smallbanner <- smallbanner %>%
+  select(-document.id)
+smallbid <- smallbid %>%
+  select(-document.id)
+
+foo <- smallbidreq %>%
+  left_join(smallbanner, by=c("reqID", "array.index")) %>%
+  left_join(smallbid, by=c("reqID", "array.index"))
+
+smallfull <- foo %>%
+  left_join(smallevent, by="document.id") %>%
+  left_join(smallauction, by="document.id") %>%
+  left_join(smallsite, by="document.id") %>%
+  rename(Auction=document.id, BidReq=array.index)
+smallfull <- smallfull %>%
+  select(-reqID)
+smallfull <- smallfull[c("Auction","country","region","dayofweek","hour","month", "date",
+                         "margin","tmax","bluekai","sitetype","sitecat","pubID",
+                         "BidReq","dsp","vertical",
+                         "bidfloor","adformat","adproduct","width","height","winner")]
+
+smallfiltered <- smallfull %>%
+  filter(dsp != "35" & dsp != "37") %>%   # Filter out DSPs we should ignore
+  filter(adformat != "1" &   # Filter out Ad Formats we should ignore
+           adformat != "2" &
+           adformat != "3" &
+           adformat != "4" &
+           adformat != "6" &
+           adformat != "7" &
+           adformat != "20" &
+           adformat != "21" &
+           adformat != "22" & 
+           adformat != "25" & 
+           adformat != "26")
+```
+
+#Making dummy variables
+
+```{r}
+#Breaks with too many observations
+library(dummies)
+smallspread <- smallfiltered %>%
+  dummy.data.frame()
+```
+
+#Export
+
+```{r}
+#write.csv(spread, file="3_15_processed")
+```
+
+```{r}
+library(jsonlite)
+prettify(list[188412])
+```
+
+

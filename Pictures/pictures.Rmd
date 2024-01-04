@@ -1,0 +1,165 @@
+---
+title: "Making Pretty Pictures"
+output: html_document
+---
+
+```{r, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(mosaic)
+```
+
+Sandbox for pictures...
+
+```{r, eval=FALSE}
+# PLot impression success rate by DSP and Vertical ID
+vdsp <- full %>%
+  select(vertical, dsp, realwinner) %>%
+  group_by(dsp, vertical) %>%
+  summarize(num=n(), prop = sum(realwinner)/n())
+ggplot(vdsp, aes(vertical, dsp)) +
+  geom_tile(aes(fill = prop)) +
+  scale_fill_gradient(low="white",high="red")
+```
+
+```{r}
+# Plot impression success rate by DSP
+dspwin <- full %>%
+  select(dsp, realwinner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(realwinner)/n(),3)) %>%
+  arrange(prop)
+ggplot(dspwin, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+
+# Plot impression response rate by DSP
+dsprespond <- full %>%
+  select(dsp, responded) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(responded)/n(),3)) %>%
+  arrange(prop)
+ggplot(dsprespond, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("DSP Response Rate") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nImpressions Responded to", reverse=TRUE))
+```
+
+```{r}
+# Plot impression success rate by DSP, for impressions with bluekai data
+bkdsp <- full %>%
+  filter(bluekai)
+bkdsp <- bkdsp %>%
+  select(dsp, realwinner) %>%
+  group_by(dsp) %>%
+  summarize(num=n(), prop = round(sum(realwinner)/n(),3)) %>%
+  arrange(prop)
+ggplot(bkdsp, aes(x=reorder(dsp, prop), y=num, fill = prop, label=prop)) +
+  geom_bar(stat="identity") +
+  geom_text(vjust = -1) +
+  scale_y_sqrt() +
+  ggtitle("Success of Impressions by DSP") +
+  xlab("DSP") +
+  ylab("Sqrt Number of Impressions") +
+  guides(fill=guide_legend(title="Proportion of \nSuccessful Impressions", reverse=TRUE))
+```
+
+```{r}
+# Plot success by bidfloor and margin
+foo <- sample(full, 1000)
+bar <- full %>%
+  filter(realwinner)
+bar2 <- full %>%
+  filter(realwinner == FALSE)
+ggplot(full, aes(x=margin, y=bidfloor, color=realwinner, alpha=realwinner)) +
+  geom_point()
+```
+
+```{r, eval=FALSE}
+# Manually pulling in from Krishan's Excel
+prop <- unlist(strsplit("4.560690051	0	0	2.562401409	0.8569505114	0.3529958198	0	0	0	0.1227803537	0	0	0.8840245692	1.575557959	0.6505361748	0	0	0.3518158548	0.000007140104633	0	0.2977772154	0.3542983637	0	0	0	0	4.309752728	0.07403238996	6.737773696	0.7894175379	0.1889020071	0.3480602374	0.3670062829	0	0", "  "))
+prop <- unlist(strsplit(prop, "\t"))
+prop <- as.numeric(prop)
+prop <- prop/100
+prop <- round(prop,3)
+num <- unlist(strsplit("170654	0	0	283367	17220481	150710	0	0	0	8666696	0	0	274653	122052	589360	0	0	259795	14005397	0	237090	525828	0	0	37832	0	25141396	10743946	143727	9374	4235	100270	1286354	334938	54303", "  "))
+num <- unlist(strsplit(num, "\t"))
+num <- as.numeric(num)
+success <- unlist(strsplit("7783	0	0	7261	147571	532	0	0	0	10641	0	0	2428	1923	3834	0	0	914	1	0	706	1863	0	0	0	0	1083532	7954	9684	74	8	349	4721	0	0", "  "))
+success <- unlist(strsplit(success, "\t"))
+success <- as.numeric(success)
+
+dsps <- c(1:34, 36)
+dsps <- as.factor(dsps)
+
+foo <- data.frame(dsps, prop, num, success)
+foo <- foo %>%
+  filter(num > 0)
+
+bar <- foo %>%
+  filter(prop > .002)
+```
+
+```{r}
+# Checking out distributions of various variables
+foo <- auction %>%
+  filter(tmax < 200) %>%
+  filter(tmax > 0)
+bar <- auction %>%
+  filter(tmax < 0)
+
+foo <- bidreq %>%
+  filter(bidfloor < 10)
+ggplot(bidreq, aes(width)) +
+  geom_histogram(binwidth=10)
+
+ggplot(bidreq, aes(x=width, y=height)) +
+  geom_jitter()
+```
+
+Mutual information matrix
+
+```{r}
+# Ugliest code ever written
+require(entropy)
+foo <- full %>%
+  select(vertical, dsp, bidfloor, adformat, adproduct, width, height, margin, tmax, bluekai, country, hour, sitetype, sitecat, pubID, realwinner)
+
+f1 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$vertical))), 3))) %>% data.frame()
+f2 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$dsp))), 3))) %>% data.frame()
+f3 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$bidfloor))), 3))) %>% data.frame()
+f4 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$adformat))), 3))) %>% data.frame()
+f5 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$adproduct))), 3))) %>% data.frame()
+f6 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$width))), 3))) %>% data.frame()
+f7 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$height))), 3))) %>% data.frame()
+f8 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$margin))), 3))) %>% data.frame()
+f9 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$tmax))), 3))) %>% data.frame()
+f10 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$bluekai))), 3))) %>% data.frame()
+f11 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$country))), 3))) %>% data.frame()
+f12 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$hour))), 3))) %>% data.frame()
+f13 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$sitetype))), 3))) %>% data.frame()
+f14 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$sitecat))), 3))) %>% data.frame()
+f15 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$pubID))), 3))) %>% data.frame()
+f16 <- t(data.frame(round(apply(foo, 2, function(x) mi.empirical(table(x, foo$realwinner))), 3))) %>% data.frame()
+
+matrix <- bind_rows(f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13,f14,f15,f16)
+row.names(matrix) <- c("vertical", "dsp", "bidfloor", "adformat", "adproduct", "width", "height", "margin", "tmax", "bluekai", "country", "hour", "sitetype", "sitecat", "pubID", "realwinner")
+```
+
+```{r}
+require(infotheo)
+foo <- full %>%
+  select(vertical, dsp, bidfloor, adformat, adproduct, width, height, margin, tmax, bluekai, country, dayofweek, hour, sitetype, sitecat, pubID, realwinner)
+round(mutinformation(foo), 3)
+```
+
